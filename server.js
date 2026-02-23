@@ -5,32 +5,36 @@ const axios = require('axios');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// Configuración de CORS súper abierta para evitar bloqueos en la TV
+app.use(cors({ origin: '*' }));
 
-// RUTA 1: BUSCADOR
+// RUTA 1: BUSCADOR (Usando un motor alternativo más estable)
 app.get('/search', async (req, res) => {
     const query = req.query.q || "";
+    console.log(`🔎 Buscando: ${query}`);
     try {
-        const { data } = await axios.get(`https://yts.mx/api/v2/list_movies.json?query_term=${encodeURIComponent(query)}`);
-        const movies = data.data.movies || [];
-        const results = movies.map(movie => ({
-            title: movie.title,
-            poster: movie.medium_cover_image,
-            imdb: movie.imdb_code // Usamos el código IMDB para el video
+        const response = await axios.get(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const results = response.data.map(item => ({
+            title: item.show.name,
+            poster: item.show.image ? item.show.image.original : "https://via.placeholder.com/300x450?text=No+Image",
+            // Intentamos sacar el código IMDB si existe, si no, usamos el nombre
+            id: item.show.externals.imdb || item.show.name 
         }));
         res.json({ results });
-    } catch (e) { res.json({ results: [] }); }
+    } catch (e) {
+        console.error("Error en búsqueda:", e.message);
+        res.json({ results: [] });
+    }
 });
 
 // RUTA 2: TENDENCIAS
 app.get('/trending', async (req, res) => {
     try {
-        const { data } = await axios.get(`https://yts.mx/api/v2/list_movies.json?sort_by=trending_score&limit=15`);
-        const movies = data.data.movies || [];
-        const results = movies.map(movie => ({
-            title: movie.title,
-            poster: movie.medium_cover_image,
-            imdb: movie.imdb_code
+        const response = await axios.get(`https://api.tvmaze.com/shows?page=1`);
+        const results = response.data.slice(0, 15).map(show => ({
+            title: show.name,
+            poster: show.image ? show.image.original : "",
+            id: show.externals.imdb || show.name
         }));
         res.json({ results });
     } catch (e) { res.json({ results: [] }); }
@@ -38,13 +42,16 @@ app.get('/trending', async (req, res) => {
 
 // RUTA 3: OBTENER VIDEO
 app.get('/get-video', (req, res) => {
-    const imdb = req.query.imdb;
-    if (imdb) {
-        // Este servidor de video es genial porque detecta el idioma
-        res.json({ url: `https://vidsrc.to/embed/movie/${imdb}` });
+    const id = req.query.imdb;
+    console.log(`🍿 Generando video para ID: ${id}`);
+    
+    // Si el ID empieza con "tt" es un código IMDB real
+    if (id && id.startsWith('tt')) {
+        res.json({ url: `https://vidsrc.to/embed/movie/${id}` });
     } else {
-        res.json({ url: "" });
+        // Si no tiene IMDB, buscamos por título en un buscador alternativo
+        res.json({ url: `https://vidsrc.to/embed/movie?imdb=${id}` });
     }
 });
 
-app.listen(PORT, () => console.log("Cerebro Online ✅"));
+app.listen(PORT, () => console.log(`Cerebro Online en puerto ${PORT} ✅`));
