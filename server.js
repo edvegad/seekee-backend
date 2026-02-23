@@ -7,58 +7,79 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors({ origin: '*' }));
 
-// --- BUSCADOR REFORZADO ---
+// API KEY pública de TMDB (Usada para pruebas y desarrollo)
+const TMDB_KEY = "3fd2be6f0c70a2a598f084ddfb75487c";
+const TMDB_BASE = "https://api.themoviedb.org/3";
+const IMG_BASE = "https://image.tmdb.org/t/p/w500";
+
+// --- RUTA 1: BUSCADOR (100% ESPAÑOL LATINO) ---
 app.get('/search', async (req, res) => {
     const query = req.query.q || "";
-    console.log(`🔎 Buscando contenido real: ${query}`);
+    console.log(`🔎 Buscando en TMDB (Latino): ${query}`);
+
     try {
-        // Buscamos en una base de datos más comercial
-        const response = await axios.get(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        // Buscamos películas y series en Español México/Latino
+        const { data } = await axios.get(`${TMDB_BASE}/search/multi?api_key=${TMDB_KEY}&language=es-MX&query=${encodeURIComponent(query)}`);
         
-        const results = response.data
-            .filter(item => item.show.externals.imdb) // VITAL: Solo lo que tenga código IMDB
+        // Filtramos solo lo que tenga póster y sea Peli o Serie
+        const results = data.results
+            .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
             .map(item => ({
-                title: item.show.name,
-                poster: item.show.image ? item.show.image.original : "https://via.placeholder.com/300x450",
-                imdb: item.show.externals.imdb,
-                type: item.show.type === "Scripted" ? "tv" : "movie"
+                id: item.id.toString(),
+                title: item.title || item.name, // 'title' para peli, 'name' para serie
+                poster: `${IMG_BASE}${item.poster_path}`,
+                type: item.media_type,
+                // Si es película mandamos 'movie', si es serie mandamos 'tv'
             }));
-        
+
         res.json({ results });
     } catch (e) {
+        console.error("Error en búsqueda TMDB:", e.message);
         res.json({ results: [] });
     }
 });
 
-// --- TENDENCIAS ---
+// --- RUTA 2: TENDENCIAS (ESTRENOS EN LATINO) ---
 app.get('/trending', async (req, res) => {
+    console.log(`🔥 Cargando estrenos de la semana...`);
     try {
-        const response = await axios.get(`https://api.tvmaze.com/shows?page=1`);
-        const results = response.data
-            .filter(show => show.externals.imdb) // Solo lo que tenga video
+        const { data } = await axios.get(`${TMDB_BASE}/trending/all/week?api_key=${TMDB_KEY}&language=es-MX`);
+        
+        const results = data.results
+            .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
             .slice(0, 18)
-            .map(show => ({
-                title: show.name,
-                poster: show.image ? show.image.original : "",
-                imdb: show.externals.imdb,
-                type: "tv"
+            .map(item => ({
+                id: item.id.toString(),
+                title: item.title || item.name,
+                poster: `${IMG_BASE}${item.poster_path}`,
+                type: item.media_type
             }));
+
         res.json({ results });
-    } catch (e) { res.json({ results: [] }); }
+    } catch (e) { 
+        res.json({ results: [] }); 
+    }
 });
 
-// --- REPRODUCTOR CON DOS SERVIDORES (BACKUP) ---
+// --- RUTA 3: EL REPRODUCTOR MULTI-IDIOMA ---
 app.get('/get-video', (req, res) => {
-    const imdb = req.query.imdb;
+    // TMDB nos da un ID numérico (ej: 12345)
+    const tmdbId = req.query.imdb; 
     const type = req.query.type || "movie";
     
-    // Si un servidor falla, el usuario puede intentar con el otro dentro del mismo reproductor
-    // Usaremos vidsrc.to que suele tener mejor catálogo
-    const baseUrl = type === "tv" 
-        ? `https://vidsrc.to/embed/tv/${imdb}/1/1` 
-        : `https://vidsrc.to/embed/movie/${imdb}`;
-        
-    res.json({ url: baseUrl });
+    // Usamos el servidor 'embed.su' o 'vidsrc.in' que son excelentes para TMDB y tienen Español
+    // Este reproductor detecta tu ubicación y prioriza audios en Español / Latino
+    let videoUrl = "";
+    
+    if (type === "tv") {
+        // Serie: Temporada 1, Capitulo 1 por defecto
+        videoUrl = `https://vidsrc.in/embed/tv?tmdb=${tmdbId}&season=1&episode=1`;
+    } else {
+        // Película
+        videoUrl = `https://vidsrc.in/embed/movie?tmdb=${tmdbId}`;
+    }
+
+    res.json({ url: videoUrl });
 });
 
-app.listen(PORT, () => console.log(`Cerebro V3 Online ✅`));
+app.listen(PORT, () => console.log(`Seekee Core V4 (Latino) Online ✅`));
