@@ -1,84 +1,60 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 
-// IMPORTANTE PARA LA NUBE: 
-// Render nos dará un puerto aleatorio en la variable process.env.PORT
-// Si estamos en local (tu PC), usará el 3000.
+// Puerto para Render o Local
 const PORT = process.env.PORT || 3000;
 
-// Configuración de CORS para permitir que tu TV se conecte desde cualquier IP
-app.use(cors({
-    origin: '*', // Permitir todas las conexiones
-    methods: ['GET', 'POST']
-}));
+// Configuración de CORS
+app.use(cors());
 
-// Ruta de búsqueda (Usando TVMaze como ejemplo seguro)
+// Ruta de búsqueda para la TV
 app.get('/search', async (req, res) => {
-    const query = req.query.q || "Sin búsqueda";
-    console.log(`\n☁️ Nube buscando: "${query}"...`);
+    const query = req.query.q || "";
+    console.log(`🔎 Buscando en la nube: ${query}`);
 
     try {
-        // Usamos TVMaze (API pública y segura)
-        const urlBusqueda = `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`;
-        
-        const respuesta = await axios.get(urlBusqueda);
-        const showsEncontrados = respuesta.data; 
-        
-        console.log(`✅ ¡Se encontraron ${showsEncontrados.length} resultados!`);
+        // 1. Buscamos la info en TVMaze (Posters y Títulos reales)
+        const response = await axios.get(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+        const data = response.data;
 
-        // Transformamos los datos
-        const resultadosParaTV = showsEncontrados.map((item, index) => {
-            const show = item.show; 
+        // 2. Formateamos los resultados para nuestra App de LG
+        const results = data.map(item => {
+            const show = item.show;
             
-            let posterHD = "https://via.placeholder.com/600x900/333333/ffffff?text=Sin+Poster";
-            if (show.image && show.image.original) {
-                posterHD = show.image.original;
-            }
-
             return {
                 id: show.id.toString(),
-                title: show.name || "Título Desconocido", 
-                poster: posterHD,      
+                title: show.name,
+                poster: show.image ? show.image.original : "https://via.placeholder.com/600x900/333333/ffffff?text=Sin+Poster",
                 type: "serie",
-                seasons: [
-                    {
-                        number: 1,
-                        episodes: [
-                            { 
-                                title: "Reproducir", 
-                                // Video de prueba (Big Buck Bunny)
-                                url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" 
-                            }
-                        ]
-                    }
-                ]
+                seasons: [{
+                    number: 1,
+                    episodes: [{
+                        title: "Ver Ahora",
+                        // AQUÍ IRÁ EL LINK DEL VIDEO REAL EN EL FUTURO
+                        url: "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                    }]
+                }]
             };
         });
 
-        // Respuesta JSON a la TV
-        res.json({
-            "search_query": query,
-            "results": resultadosParaTV
-        });
+        // Enviamos la respuesta a la TV
+        res.json({ results });
 
     } catch (error) {
-        console.error("❌ Error en la nube:", error.message);
-        res.json({
-            "search_query": query,
-            "results": []
-        });
+        console.error("Error en el servidor:", error.message);
+        res.json({ results: [] });
     }
 });
 
-// Ruta base para saber si el servidor está vivo
+// Ruta de bienvenida (para probar en el navegador)
 app.get('/', (req, res) => {
-    res.send('<h1>¡Seekee API está funcionando en la nube! 🚀</h1>');
+    res.send('<h1>¡Seekee API Online! 🚀</h1><p>El cerebro de la TV está funcionando perfectamente.</p>');
 });
 
-// Iniciar el servidor
 app.listen(PORT, () => {
-    console.log(`✅ Servidor escuchando en el puerto ${PORT}`);
+    console.log(`✅ Servidor activo en puerto ${PORT}`);
 });
