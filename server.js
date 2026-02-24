@@ -20,7 +20,6 @@ app.get('/search', async (req, res) => {
             .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
             .map(item => ({
                 id: item.id.toString(),
-                imdb: item.id.toString(),
                 title: item.title || item.name,
                 poster: `${IMG_BASE}${item.poster_path}`,
                 type: item.media_type || "movie"
@@ -38,7 +37,6 @@ app.get('/trending', async (req, res) => {
             .slice(0, 18)
             .map(item => ({
                 id: item.id.toString(),
-                imdb: item.id.toString(),
                 title: item.title || item.name,
                 poster: `${IMG_BASE}${item.poster_path}`,
                 type: item.media_type || "movie"
@@ -47,40 +45,30 @@ app.get('/trending', async (req, res) => {
     } catch (e) { res.json({ results: [] }); }
 });
 
-// --- RUTA 3: SISTEMA MULTI-FUENTE (La solución al idioma) ---
-app.get('/get-video', async (req, res) => {
-    const tmdbId = req.query.imdb; 
+// --- RUTA 3: SERVIDORES LATINOS (El Filtro) ---
+app.get('/get-video', (req, res) => {
+    const tmdbId = req.query.imdb || req.query.id; 
     const type = req.query.type || "movie";
     
-    // Necesitamos el código IMDB real (ej: tt12345) para el servidor Latino
-    // Hacemos una pequeña consulta extra a TMDB para obtenerlo
-    let imdbCode = tmdbId;
-    try {
-        const external = await axios.get(`${TMDB_BASE}/${type}/${tmdbId}/external_ids?api_key=${TMDB_KEY}`);
-        if(external.data.imdb_id) imdbCode = external.data.imdb_id;
-    } catch(e) { console.log("No se pudo obtener IMDB real"); }
-
-    // Generamos 3 opciones de servidores
     let sources = [];
 
+    // Estos 3 servidores son los que más contenido en Español Latino guardan actualmente
     if (type === "tv") {
-        // SERIES
         sources = [
-            { name: "Latino 1 (Warez)", url: `https://embed.warezcdn.link/serie/${imdbCode}/1/1` }, // Suele ser Latino
-            { name: "Latino 2 (Smashy)", url: `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}&season=1&episode=1` },
-            { name: "Global (Vidsrc)", url: `https://vidsrc.to/embed/tv/${imdbCode}/1/1` }
+            { name: "Latino 1 (EmbedSU)", url: `https://embed.su/embed/tv/${tmdbId}/1/1` },
+            { name: "Latino 2 (Vidsrc PRO)", url: `https://vidsrc.pro/embed/tv/${tmdbId}/1/1` },
+            { name: "Global (AutoEmbed)", url: `https://autoembed.co/tv/tmdb/${tmdbId}-1-1` }
         ];
     } else {
-        // PELICULAS
         sources = [
-            { name: "Latino 1 (Warez)", url: `https://embed.warezcdn.link/filme/${imdbCode}` }, // La joya para latinos
-            { name: "Latino 2 (Smashy)", url: `https://embed.smashystream.com/playere.php?tmdb=${tmdbId}` },
-            { name: "Global (Vidsrc)", url: `https://vidsrc.to/embed/movie/${imdbCode}` }
+            { name: "Latino 1 (EmbedSU)", url: `https://embed.su/embed/movie/${tmdbId}` },
+            { name: "Latino 2 (Vidsrc PRO)", url: `https://vidsrc.pro/embed/movie/${tmdbId}` },
+            { name: "Global (AutoEmbed)", url: `https://autoembed.co/movie/tmdb/${tmdbId}` }
         ];
     }
 
-    console.log(`🎬 Enviando ${sources.length} opciones para: ${imdbCode}`);
+    console.log(`🎬 Enviando 3 Servidores HD para TMDB: ${tmdbId}`);
     res.json({ sources: sources });
 });
 
-app.listen(PORT, () => console.log(`Cerebro Multi-Fuente Online ✅`));
+app.listen(PORT, () => console.log(`Cerebro Multi-Latino Online ✅`));
