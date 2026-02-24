@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 // CORS abierto para que tu Smart TV LG se conecte sin bloqueos
 app.use(cors({ origin: '*' }));
 
-// Llave pública de TheMovieDB (La base de datos de películas más grande del mundo)
+// Llave pública de TheMovieDB (Posters y títulos en Español)
 const TMDB_KEY = "3fd2be6f0c70a2a598f084ddfb75487c";
 const TMDB_BASE = "https://api.themoviedb.org/3";
 const IMG_BASE = "https://image.tmdb.org/t/p/w500";
@@ -21,15 +21,13 @@ app.get('/search', async (req, res) => {
     console.log(`🔎 Buscando en TMDB (Latino): ${query}`);
 
     try {
-        // Pedimos a TMDB los resultados en Español México
         const { data } = await axios.get(`${TMDB_BASE}/search/multi?api_key=${TMDB_KEY}&language=es-MX&query=${encodeURIComponent(query)}`);
         
-        // Filtramos: Solo películas/series que tengan póster
         const results = data.results
             .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
             .map(item => ({
                 id: item.id.toString(),
-                imdb: item.id.toString(), // La llave maestra numérica de TMDB
+                imdb: item.id.toString(), // Llave numérica de TMDB
                 title: item.title || item.name,
                 poster: `${IMG_BASE}${item.poster_path}`,
                 type: item.media_type || "movie"
@@ -52,7 +50,7 @@ app.get('/trending', async (req, res) => {
         
         const results = data.results
             .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
-            .slice(0, 18) // Las 18 más populares
+            .slice(0, 18)
             .map(item => ({
                 id: item.id.toString(),
                 imdb: item.id.toString(),
@@ -69,38 +67,36 @@ app.get('/trending', async (req, res) => {
 });
 
 // ==========================================
-// RUTA 3: REPRODUCTOR MULTI-AUDIO (VidLink PRO)
+// RUTA 3: AGREGADOR DE SERVIDORES (Para buscar Latino)
 // ==========================================
 app.get('/get-video', (req, res) => {
-    // Recibimos la llave de la TV
     const tmdbId = req.query.imdb || req.query.id; 
     const type = req.query.type || "movie";
     
     let videoUrl = "";
     
-    // VidLink PRO: Un solo reproductor inteligente.
-    // Si la película tiene audio dual, mostrará un icono de "Auriculares" o "Engranaje" para cambiar a Español.
+    // multiembed.mov nos dará una lista de servidores a elegir.
+    // El usuario podrá probar cuál servidor tiene el audio en Latino.
     if (type === "tv") {
-        // Serie: Temporada 1, Capitulo 1 por defecto (Puedes mejorar esto luego añadiendo botones de capítulos en tu app)
-        videoUrl = `https://vidlink.pro/tv/${tmdbId}/1/1`;
+        // Por defecto: Temporada 1, Episodio 1
+        videoUrl = `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1&s=1&e=1`;
     } else {
-        // Película
-        videoUrl = `https://vidlink.pro/movie/${tmdbId}`;
+        videoUrl = `https://multiembed.mov/?video_id=${tmdbId}&tmdb=1`;
     }
 
-    console.log(`🎬 Abriendo Reproductor Multi-Audio: ${videoUrl}`);
+    console.log(`🎬 Abriendo Agregador de Servidores: ${videoUrl}`);
     res.json({ url: videoUrl });
 });
 
 // ==========================================
-// RUTA DE ESTADO (Para revisar que Render funciona)
+// RUTA DE ESTADO (Para revisar que Render se actualizó)
 // ==========================================
 app.get('/', (req, res) => {
     res.send(`
         <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
-            <h1>Cerebro Seekee V8 Online ✅</h1>
-            <p>Reproductor VidLink Multi-Audio Activado.</p>
-            <p style="color: green;">Tu TV LG ya puede conectarse.</p>
+            <h1>Cerebro Seekee V9 Online ✅</h1>
+            <p>Agregador de Múltiples Servidores Activado.</p>
+            <p style="color: blue;">Si un video está en inglés, el usuario puede elegir otro servidor.</p>
         </div>
     `);
 });
