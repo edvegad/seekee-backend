@@ -1,69 +1,42 @@
 const express = require('express');
+const request = require('request');
 const cors = require('cors');
-const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors({ origin: '*' }));
 
-const TMDB_KEY = "3fd2be6f0c70a2a598f084ddfb75487c";
-const TMDB_BASE = "https://api.themoviedb.org/3";
-const IMG_BASE = "https://image.tmdb.org/t/p/w500";
+// --- EL PROXY MÁGICO ---
+// Esta ruta recibe una URL, la descarga, le quita los bloqueos y te la muestra
+app.use('/proxy', (req, res) => {
+    // La dirección que queremos visitar (ej. Cuevana)
+    const targetUrl = req.query.url;
 
-// --- RUTA 1: BUSCADOR ---
-app.get('/search', async (req, res) => {
-    const query = req.query.q || "";
-    try {
-        const { data } = await axios.get(`${TMDB_BASE}/search/multi?api_key=${TMDB_KEY}&language=es-MX&query=${encodeURIComponent(query)}`);
-        const results = data.results
-            .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
-            .map(item => ({
-                id: item.id.toString(),
-                imdb: item.id.toString(),
-                title: item.title || item.name,
-                poster: `${IMG_BASE}${item.poster_path}`,
-                type: item.media_type || "movie"
-            }));
-        res.json({ results });
-    } catch (e) { res.json({ results: [] }); }
+    if (!targetUrl) {
+        return res.send('Escribe una URL para navegar. Ej: /proxy?url=https://cuevana.biz');
+    }
+
+    // Le pedimos la página a internet
+    request({ url: targetUrl, followAllRedirects: true }, (error, response, body) => {
+        if (error) return res.send('Error cargando la página');
+
+        // AQUÍ ESTÁ EL TRUCO:
+        // Borramos la orden de "Prohibido Iframe" antes de enviarla a la TV
+        res.removeHeader('X-Frame-Options');
+        res.removeHeader('Content-Security-Policy');
+        
+        // Truco extra: Intentamos romper scripts de publicidad comunes reemplazando texto
+        let cleanBody = body.replace(/window.open/g, 'console.log'); // Anula popups básicos
+
+        // Corregimos los enlaces para que sigan pasando por nuestro proxy
+        // (Esto es complejo, funciona para navegación básica)
+        // cleanBody = cleanBody.replace(/href="https:\/\//g, `href="${req.protocol}://${req.get('host')}/proxy?url=https://`);
+
+        res.send(cleanBody);
+    });
 });
 
-// --- RUTA 2: TENDENCIAS ---
-app.get('/trending', async (req, res) => {
-    try {
-        const { data } = await axios.get(`${TMDB_BASE}/trending/all/week?api_key=${TMDB_KEY}&language=es-MX`);
-        const results = data.results
-            .filter(item => item.poster_path && (item.media_type === 'movie' || item.media_type === 'tv'))
-            .slice(0, 18)
-            .map(item => ({
-                id: item.id.toString(),
-                imdb: item.id.toString(),
-                title: item.title || item.name,
-                poster: `${IMG_BASE}${item.poster_path}`,
-                type: item.media_type || "movie"
-            }));
-        res.json({ results });
-    } catch (e) { res.json({ results: [] }); }
-});
+app.get('/', (req, res) => res.send('<h1>Navegador Proxy Online 🛡️</h1>'));
 
-// --- RUTA 3: EXTRACTOR DE ENLACE DIRECTO (.m3u8 / .mp4) ---
-app.get('/get-video', (req, res) => {
-    const tmdbId = req.query.imdb || req.query.id; 
-    console.log(`🎬 Extrayendo link directo para: ${tmdbId}`);
-    
-    // Aquí es donde un Scraper Profesional (Puppeteer) extraería el .mp4 de Cuevana.
-    // Por ahora, mandamos un link de transmisión HLS (.m3u8) real para probar el reproductor de la TV.
-    let sources = [
-        { 
-            name: "Reproductor Nativo (TV)", 
-            // Este es un video de prueba en formato HLS de Apple, perfecto para webOS
-            url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" 
-        }
-    ];
-
-    res.json({ sources: sources });
-});
-
-app.get('/', (req, res) => res.send('Cerebro Extractor V11 Online ✅'));
-app.listen(PORT, () => console.log(`Cerebro Online en puerto ${PORT} ✅`));
+app.listen(PORT, () => console.log(`Proxy corriendo en puerto ${PORT}`));
